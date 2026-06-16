@@ -1,1023 +1,418 @@
-const STORAGE_KEY = "blagajne-faza-1-2";
+let state = { stores: [], users: [], closings: [], attachments: [], audit: [] };
+let currentUser = JSON.parse(localStorage.getItem("b3-user") || "null");
 
-const defaultUsers = [
-  { id: "u-owner", name: "Gregor Lastnik", role: "administrator", storeIds: ["all"] },
-  { id: "u-accounting", name: "Maja Računovodstvo", role: "računovodstvo", storeIds: ["all"] },
-  { id: "u-manager-lj", name: "Nina Ljubljana", role: "poslovodja", storeIds: ["s-lj"] },
-  { id: "u-cashier-mb", name: "Tomaž Maribor", role: "blagajnik", storeIds: ["s-mb"] }
-];
+const $ = (id) => document.getElementById(id);
+const money = (v) => new Intl.NumberFormat("sl-SI", { style: "currency", currency: "EUR" }).format(Number(v || 0));
+const today = () => new Date().toISOString().slice(0, 10);
+const num = (id) => Number($(id).value || 0);
 
-const defaultState = {
-  users: defaultUsers,
-  activeUserId: "u-owner",
-  stores: [
-    { id: "s-lj", name: "Trgovina Center", city: "Ljubljana", manager: "Nina Ljubljana" },
-    { id: "s-mb", name: "Trgovina Lent", city: "Maribor", manager: "Tomaž Maribor" }
-  ],
-  closings: [],
-  audit: []
-};
-
-let state = loadState();
-
-const elements = {
-  navItems: document.querySelectorAll(".nav-item"),
-  views: document.querySelectorAll(".view"),
-  viewTitle: document.querySelector("#viewTitle"),
-  viewSubtitle: document.querySelector("#viewSubtitle"),
-  activeUser: document.querySelector("#activeUser"),
-  activeRole: document.querySelector("#activeRole"),
-  quickCloseBtn: document.querySelector("#quickCloseBtn"),
-  seedDataBtn: document.querySelector("#seedDataBtn"),
-  backupBtn: document.querySelector("#backupBtn"),
-  storeTodayRows: document.querySelector("#storeTodayRows"),
-  recentClosings: document.querySelector("#recentClosings"),
-  approvalList: document.querySelector("#approvalList"),
-  reportRows: document.querySelector("#reportRows"),
-  reportSummary: document.querySelector("#reportSummary"),
-  exportCsvBtn: document.querySelector("#exportCsvBtn"),
-  exportJsonBtn: document.querySelector("#exportJsonBtn"),
-  importJsonBtn: document.querySelector("#importJsonBtn"),
-  importJsonFile: document.querySelector("#importJsonFile"),
-  monthFilterBtn: document.querySelector("#monthFilterBtn"),
-  printReportBtn: document.querySelector("#printReportBtn"),
-  clearDataBtn: document.querySelector("#clearDataBtn"),
-  filterFrom: document.querySelector("#filterFrom"),
-  filterTo: document.querySelector("#filterTo"),
-  filterMonth: document.querySelector("#filterMonth"),
-  filterStore: document.querySelector("#filterStore"),
-  filterStatus: document.querySelector("#filterStatus"),
-  storeList: document.querySelector("#storeList"),
-  storeForm: document.querySelector("#storeForm"),
-  storeEditId: document.querySelector("#storeEditId"),
-  storeFormTitle: document.querySelector("#storeFormTitle"),
-  storeSubmitBtn: document.querySelector("#storeSubmitBtn"),
-  cancelStoreEditBtn: document.querySelector("#cancelStoreEditBtn"),
-  userList: document.querySelector("#userList"),
-  userForm: document.querySelector("#userForm"),
-  userEditId: document.querySelector("#userEditId"),
-  userFormTitle: document.querySelector("#userFormTitle"),
-  userSubmitBtn: document.querySelector("#userSubmitBtn"),
-  cancelUserEditBtn: document.querySelector("#cancelUserEditBtn"),
-  userStoreAccess: document.querySelector("#userStoreAccess"),
-  auditList: document.querySelector("#auditList"),
-  closingForm: document.querySelector("#closingForm"),
-  resetFormBtn: document.querySelector("#resetFormBtn"),
-  closingSubmitBtn: document.querySelector("#closingSubmitBtn"),
-  closingStatus: document.querySelector("#closingStatus"),
-  storeId: document.querySelector("#storeId"),
-  closingDate: document.querySelector("#closingDate"),
-  openingCash: document.querySelector("#openingCash"),
-  cashSales: document.querySelector("#cashSales"),
-  cardSales: document.querySelector("#cardSales"),
-  otherSales: document.querySelector("#otherSales"),
-  refunds: document.querySelector("#refunds"),
-  deposit: document.querySelector("#deposit"),
-  countedCash: document.querySelector("#countedCash"),
-  cardStatement: document.querySelector("#cardStatement"),
-  notes: document.querySelector("#notes"),
-  attachments: document.querySelector("#attachments"),
-  expectedCash: document.querySelector("#expectedCash"),
-  cashVariance: document.querySelector("#cashVariance"),
-  cardVariance: document.querySelector("#cardVariance"),
-  closingId: document.querySelector("#closingId"),
-  todayRevenue: document.querySelector("#todayRevenue"),
-  todayCash: document.querySelector("#todayCash"),
-  todayCards: document.querySelector("#todayCards"),
-  openVariance: document.querySelector("#openVariance")
-};
-
-const viewCopy = {
-  dashboard: ["Pregled", "Dnevni promet, zaključki in odstopanja po trgovinah."],
-  closing: ["Nov zaključek", "Vnos dnevnega zaključka z avtomatskim izračunom odstopanj."],
-  approvals: ["Potrditve", "Pregled, potrjevanje in zaklepanje dnevnih zaključkov."],
-  reports: ["Poročila", "Filtri, seštevki in izvoz podatkov za računovodstvo."],
-  settings: ["Nastavitve", "Upravljanje trgovin, uporabnikov in varnostnih kopij."]
-};
-
-function loadState() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (!saved) return structuredClone(defaultState);
-  try {
-    return normalizeState({ ...structuredClone(defaultState), ...JSON.parse(saved) });
-  } catch {
-    return structuredClone(defaultState);
-  }
+async function api(path, payload) {
+  const res = await fetch(path, {
+    method: payload ? "POST" : "GET",
+    headers: payload ? { "Content-Type": "application/json" } : undefined,
+    body: payload ? JSON.stringify(payload) : undefined
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Napaka");
+  return data;
 }
 
-function normalizeState(nextState) {
-  return {
-    ...structuredClone(defaultState),
-    ...nextState,
-    users: Array.isArray(nextState.users) && nextState.users.length ? nextState.users : structuredClone(defaultUsers),
-    stores: Array.isArray(nextState.stores) ? nextState.stores : [],
-    closings: Array.isArray(nextState.closings) ? nextState.closings : [],
-    audit: Array.isArray(nextState.audit) ? nextState.audit : []
-  };
+function seller(id) {
+  return state.users.find((u) => u.id === id) || { name: "neznano", role: "" };
 }
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+function store(id) {
+  return state.stores.find((s) => s.id === id) || { name: "neznana trgovina", city: "" };
 }
 
-function money(value) {
-  return new Intl.NumberFormat("sl-SI", { style: "currency", currency: "EUR" }).format(Number(value || 0));
-}
-
-function todayIso(offset = 0) {
-  const date = new Date();
-  date.setDate(date.getDate() + offset);
-  return date.toISOString().slice(0, 10);
-}
-
-function dateIsoLocal(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function numberValue(id) {
-  return Number(elements[id].value || 0);
-}
-
-function currentUser() {
-  return state.users.find((user) => user.id === state.activeUserId) || state.users[0];
+function canManage() {
+  return ["administrator", "računovodstvo"].includes(currentUser?.role);
 }
 
 function visibleStores() {
-  const user = currentUser();
-  if (user.storeIds.includes("all")) return state.stores;
-  return state.stores.filter((store) => user.storeIds.includes(store.id));
+  if (!currentUser?.store_id) return state.stores;
+  return state.stores.filter((s) => s.id === currentUser.store_id);
 }
 
-function canApprove() {
-  return ["administrator", "računovodstvo", "poslovodja"].includes(currentUser().role);
+function total(c) {
+  return Number(c.cash_sales) + Number(c.card_sales) + Number(c.other_sales) - Number(c.refunds);
 }
 
-function canManageSettings() {
-  return ["administrator", "računovodstvo"].includes(currentUser().role);
+function variance(c) {
+  return Number(c.cash_variance) + Number(c.card_variance);
 }
 
-function totalSales(closing) {
-  return closing.cashSales + closing.cardSales + closing.otherSales - closing.refunds;
+function calcForm() {
+  const expected = num("openingCash") + num("cashSales") - num("refunds") - num("deposit");
+  $("expectedCash").textContent = money(expected);
+  $("cashVariance").textContent = money(num("countedCash") - expected);
+  $("cardVariance").textContent = money(num("cardStatement") - num("cardSales"));
 }
 
-function expectedCashFor(values) {
-  return values.openingCash + values.cashSales - values.refunds - values.deposit;
-}
-
-function cashVarianceFor(values) {
-  return values.countedCash - expectedCashFor(values);
-}
-
-function cardVarianceFor(values) {
-  return values.cardStatement - values.cardSales;
-}
-
-function closingCalculationsFromForm() {
-  const values = {
-    openingCash: numberValue("openingCash"),
-    cashSales: numberValue("cashSales"),
-    cardSales: numberValue("cardSales"),
-    otherSales: numberValue("otherSales"),
-    refunds: numberValue("refunds"),
-    deposit: numberValue("deposit"),
-    countedCash: numberValue("countedCash"),
-    cardStatement: numberValue("cardStatement")
-  };
-  return {
-    expectedCash: expectedCashFor(values),
-    cashVariance: cashVarianceFor(values),
-    cardVariance: cardVarianceFor(values)
-  };
-}
-
-function renderCalculations() {
-  const calc = closingCalculationsFromForm();
-  elements.expectedCash.textContent = money(calc.expectedCash);
-  elements.cashVariance.textContent = money(calc.cashVariance);
-  elements.cardVariance.textContent = money(calc.cardVariance);
-}
-
-function setView(viewName) {
-  elements.navItems.forEach((item) => item.classList.toggle("active", item.dataset.view === viewName));
-  elements.views.forEach((view) => view.classList.remove("active"));
-  document.querySelector(`#${viewName}View`).classList.add("active");
-  elements.viewTitle.textContent = viewCopy[viewName][0];
-  elements.viewSubtitle.textContent = viewCopy[viewName][1];
+async function refresh() {
+  state = await api("/api/state");
   render();
-}
-
-function statusBadge(status) {
-  const label = status === "approved" ? "Potrjeno" : "V čakanju";
-  return `<span class="status ${status}">${label}</span>`;
-}
-
-function varianceTag(value) {
-  const type = Math.abs(value) > 0.009 ? "warn" : "ok";
-  const label = Math.abs(value) > 0.009 ? `Odstopanje ${money(value)}` : "Brez odstopanja";
-  return `<span class="tag ${type}">${label}</span>`;
-}
-
-function storeName(storeId) {
-  const store = state.stores.find((item) => item.id === storeId);
-  return store ? `${store.name}, ${store.city}` : "Neznana trgovina";
-}
-
-function renderUsers() {
-  elements.activeUser.innerHTML = state.users
-    .map((user) => `<option value="${user.id}">${user.name}</option>`)
-    .join("");
-  elements.activeUser.value = state.activeUserId;
-  elements.activeRole.textContent = currentUser().role;
-}
-
-function renderStoreOptions() {
-  const options = visibleStores().map((store) => `<option value="${store.id}">${store.name} - ${store.city}</option>`).join("");
-  elements.storeId.innerHTML = options;
-  elements.filterStore.innerHTML = `<option value="all">Vse trgovine</option>${state.stores
-    .map((store) => `<option value="${store.id}">${store.name} - ${store.city}</option>`)
-    .join("")}`;
-  elements.userStoreAccess.innerHTML = `<option value="all">Vse trgovine</option>${state.stores
-    .map((store) => `<option value="${store.id}">${store.name} - ${store.city}</option>`)
-    .join("")}`;
-}
-
-function renderDashboard() {
-  const today = todayIso();
-  const visibleStoreIds = visibleStores().map((store) => store.id);
-  const todayClosings = state.closings.filter((closing) => closing.date === today && visibleStoreIds.includes(closing.storeId));
-  const totals = todayClosings.reduce(
-    (sum, closing) => {
-      sum.revenue += totalSales(closing);
-      sum.cash += closing.cashSales;
-      sum.cards += closing.cardSales;
-      return sum;
-    },
-    { revenue: 0, cash: 0, cards: 0 }
-  );
-  const openVariance = state.closings
-    .filter((closing) => closing.status !== "approved" && visibleStoreIds.includes(closing.storeId))
-    .reduce((sum, closing) => sum + Math.abs(closing.cashVariance) + Math.abs(closing.cardVariance), 0);
-
-  elements.todayRevenue.textContent = money(totals.revenue);
-  elements.todayCash.textContent = money(totals.cash);
-  elements.todayCards.textContent = money(totals.cards);
-  elements.openVariance.textContent = money(openVariance);
-
-  elements.storeTodayRows.innerHTML = visibleStores()
-    .map((store) => {
-      const closing = todayClosings.find((item) => item.storeId === store.id);
-      if (!closing) {
-        return `<tr><td>${store.name}</td><td><span class="status missing">Ni zaključka</span></td><td>${money(0)}</td><td>${money(0)}</td><td>${money(0)}</td><td>${money(0)}</td></tr>`;
-      }
-      return `<tr>
-        <td>${store.name}</td>
-        <td>${statusBadge(closing.status)}</td>
-        <td>${money(totalSales(closing))}</td>
-        <td>${money(closing.cashSales)}</td>
-        <td>${money(closing.cardSales)}</td>
-        <td>${money(closing.cashVariance + closing.cardVariance)}</td>
-      </tr>`;
-    })
-    .join("");
-
-  renderClosingCards(elements.recentClosings, state.closings
-    .filter((closing) => visibleStoreIds.includes(closing.storeId))
-    .slice()
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 6), false);
-}
-
-function renderClosingCards(container, closings, approvalMode) {
-  if (!closings.length) {
-    container.innerHTML = `<div class="empty-state">Ni vnosov za prikaz.</div>`;
-    return;
-  }
-
-  container.innerHTML = "";
-  closings.forEach((closing) => {
-    const template = document.querySelector("#closingCardTemplate").content.cloneNode(true);
-    template.querySelector(".card-title").textContent = storeName(closing.storeId);
-    template.querySelector(".card-meta").textContent = `${closing.date} | vnesel ${closing.createdByName}`;
-    template.querySelector(".card-numbers").textContent = `Promet ${money(totalSales(closing))} | gotovina ${money(closing.cashSales)} | kartice ${money(closing.cardSales)}`;
-    template.querySelector(".card-tags").innerHTML = `${statusBadge(closing.status)} ${varianceTag(closing.cashVariance + closing.cardVariance)} <span class="tag ok">${closing.attachments.length} dokazil</span>`;
-
-    const actions = template.querySelector(".card-actions");
-    const edit = document.createElement("button");
-    edit.className = "secondary";
-    edit.type = "button";
-    edit.textContent = "Odpri";
-    edit.addEventListener("click", () => editClosing(closing.id));
-    actions.append(edit);
-
-    if (closing.attachments.length) {
-      const files = document.createElement("button");
-      files.className = "secondary";
-      files.type = "button";
-      files.textContent = "Dokazila";
-      files.addEventListener("click", () => viewAttachments(closing.id));
-      actions.append(files);
-    }
-
-    if (approvalMode && closing.status !== "approved" && canApprove()) {
-      const approve = document.createElement("button");
-      approve.className = "primary";
-      approve.type = "button";
-      approve.textContent = "Potrdi";
-      approve.addEventListener("click", () => approveClosing(closing.id));
-      actions.append(approve);
-    }
-
-    if (closing.status !== "approved") {
-      const remove = document.createElement("button");
-      remove.className = "danger";
-      remove.type = "button";
-      remove.textContent = "Izbriši";
-      remove.addEventListener("click", () => deleteClosing(closing.id));
-      actions.append(remove);
-    }
-
-    container.append(template);
-  });
-}
-
-function renderApprovals() {
-  const visibleStoreIds = visibleStores().map((store) => store.id);
-  const pending = state.closings
-    .filter((closing) => closing.status !== "approved" && visibleStoreIds.includes(closing.storeId))
-    .sort((a, b) => b.date.localeCompare(a.date));
-  renderClosingCards(elements.approvalList, pending, true);
-}
-
-function filteredClosings() {
-  const from = elements.filterFrom.value;
-  const to = elements.filterTo.value;
-  const store = elements.filterStore.value;
-  const status = elements.filterStatus.value;
-  const visibleStoreIds = visibleStores().map((item) => item.id);
-
-  return state.closings
-    .filter((closing) => visibleStoreIds.includes(closing.storeId))
-    .filter((closing) => !from || closing.date >= from)
-    .filter((closing) => !to || closing.date <= to)
-    .filter((closing) => store === "all" || closing.storeId === store)
-    .filter((closing) => status === "all" || closing.status === status)
-    .sort((a, b) => b.date.localeCompare(a.date));
-}
-
-function renderReports() {
-  const closings = filteredClosings();
-  const totals = closings.reduce(
-    (sum, closing) => {
-      sum.revenue += totalSales(closing);
-      sum.cash += closing.cashSales;
-      sum.cards += closing.cardSales;
-      sum.variance += closing.cashVariance + closing.cardVariance;
-      return sum;
-    },
-    { revenue: 0, cash: 0, cards: 0, variance: 0 }
-  );
-
-  elements.reportSummary.innerHTML = `
-    <div><span>Promet</span><strong>${money(totals.revenue)}</strong></div>
-    <div><span>Gotovina</span><strong>${money(totals.cash)}</strong></div>
-    <div><span>Kartice</span><strong>${money(totals.cards)}</strong></div>
-    <div><span>Odstopanje</span><strong>${money(totals.variance)}</strong></div>
-  `;
-
-  elements.reportRows.innerHTML = closings.length
-    ? closings
-        .map(
-          (closing) => `<tr>
-            <td>${closing.date}</td>
-            <td>${storeName(closing.storeId)}</td>
-            <td>${statusBadge(closing.status)}</td>
-            <td>${money(totalSales(closing))}</td>
-            <td>${money(closing.cashSales)}</td>
-            <td>${money(closing.cardSales)}</td>
-            <td>${money(closing.cashVariance + closing.cardVariance)}</td>
-            <td><div class="inline-actions"><button class="secondary" type="button" data-edit="${closing.id}">Odpri</button>${closing.status !== "approved" ? `<button class="danger" type="button" data-delete-closing="${closing.id}">Izbriši</button>` : ""}</div></td>
-          </tr>`
-        )
-        .join("")
-    : `<tr><td colspan="8">Ni podatkov za izbrane filtre.</td></tr>`;
-}
-
-function renderStores() {
-  elements.storeList.innerHTML = state.stores.length
-    ? state.stores
-        .map(
-          (store) => `<article class="store-item">
-        <strong>${store.name}</strong>
-        <span>${store.city}</span>
-        <span>Odgovorna oseba: ${store.manager}</span>
-        <div class="inline-actions">
-          <button class="secondary" type="button" data-edit-store="${store.id}">Uredi</button>
-          <button class="danger" type="button" data-delete-store="${store.id}">Odstrani</button>
-        </div>
-      </article>`
-        )
-        .join("")
-    : `<div class="empty-state">Ni vnesenih trgovin. Dodaj prvo trgovino z obrazcem na levi.</div>`;
-}
-
-function renderUsersList() {
-  elements.userList.innerHTML = state.users.length
-    ? state.users
-        .map((user) => {
-          const access = user.storeIds.includes("all")
-            ? "Vse trgovine"
-            : user.storeIds.map((storeId) => storeName(storeId)).join(", ");
-          const locked = user.id === state.activeUserId || state.users.length === 1;
-          return `<article class="store-item">
-            <strong>${user.name}</strong>
-            <span>${user.role}</span>
-            <span>Dostop: ${access || "brez trgovin"}</span>
-            <div class="inline-actions">
-              <button class="secondary" type="button" data-edit-user="${user.id}">Uredi</button>
-              <button class="danger" type="button" data-delete-user="${user.id}" ${locked ? "disabled" : ""}>Odstrani</button>
-            </div>
-          </article>`;
-        })
-        .join("")
-    : `<div class="empty-state">Ni uporabnikov.</div>`;
-}
-
-function renderAudit() {
-  const rows = state.audit.slice(0, 8);
-  elements.auditList.innerHTML = rows.length
-    ? rows
-        .map((entry) => `<div class="audit-row"><strong>${entry.action}</strong><span>${entry.userName}</span><span>${new Date(entry.createdAt).toLocaleString("sl-SI")}</span></div>`)
-        .join("")
-    : `<div class="empty-state">Revizijska sled je prazna.</div>`;
 }
 
 function render() {
-  renderUsers();
-  renderStoreOptions();
+  if (!currentUser) return;
+  $("currentUserName").textContent = currentUser.name;
+  $("currentUserRole").textContent = currentUser.role;
+  renderOptions();
   renderDashboard();
-  renderApprovals();
   renderReports();
-  renderStores();
-  renderUsersList();
+  renderAdminTables();
   renderAudit();
-  renderCalculations();
 }
 
-async function filesToAttachments(fileList) {
-  const files = Array.from(fileList || []);
-  return Promise.all(
-    files.map(
-      (file) =>
-        new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve({ name: file.name, type: file.type, size: file.size, dataUrl: reader.result });
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        })
-    )
-  );
+function renderOptions() {
+  const stores = visibleStores();
+  $("storeId").innerHTML = stores.map((s) => `<option value="${s.id}">${s.name} - ${s.city}</option>`).join("");
+  $("filterStore").innerHTML = `<option value="all">Vse trgovine</option>${stores.map((s) => `<option value="${s.id}">${s.name}</option>`).join("")}`;
+  $("userStore").innerHTML = `<option value="">Vse trgovine</option>${state.stores.map((s) => `<option value="${s.id}">${s.name}</option>`).join("")}`;
+  const users = state.users.filter((u) => u.active !== 0).filter((u) => !currentUser.store_id || !u.store_id || u.store_id === currentUser.store_id);
+  $("sellerId").innerHTML = users.map((u) => `<option value="${u.id}">${u.name}</option>`).join("");
+  $("filterSeller").innerHTML = `<option value="all">Vse prodajalke</option>${users.map((u) => `<option value="${u.id}">${u.name}</option>`).join("")}`;
+}
+
+function visibleClosings() {
+  const storeIds = new Set(visibleStores().map((s) => s.id));
+  return state.closings.filter((c) => storeIds.has(c.store_id));
+}
+
+function renderDashboard() {
+  const rows = visibleClosings().filter((c) => c.closing_date === today());
+  $("mRevenue").textContent = money(rows.reduce((s, c) => s + total(c), 0));
+  $("mCash").textContent = money(rows.reduce((s, c) => s + Number(c.cash_sales), 0));
+  $("mCards").textContent = money(rows.reduce((s, c) => s + Number(c.card_sales), 0));
+  $("mVariance").textContent = money(rows.reduce((s, c) => s + Math.abs(variance(c)), 0));
+  renderStoreChart();
+  renderSellerStats();
+}
+
+function renderStoreChart() {
+  const totals = visibleStores().map((s) => {
+    const value = visibleClosings().filter((c) => c.store_id === s.id).reduce((sum, c) => sum + total(c), 0);
+    return { name: s.name, value };
+  });
+  const max = Math.max(1, ...totals.map((r) => r.value));
+  $("storeChart").innerHTML = totals.map((r) => `
+    <div class="bar-row">
+      <strong>${r.name}</strong>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.max(2, (r.value / max) * 100)}%"></div></div>
+      <span>${money(r.value)}</span>
+    </div>
+  `).join("") || `<p>Ni podatkov za graf.</p>`;
+}
+
+function renderSellerStats() {
+  const map = new Map();
+  visibleClosings().forEach((c) => {
+    const key = c.seller_id;
+    const row = map.get(key) || { count: 0, revenue: 0, variance: 0 };
+    row.count += 1;
+    row.revenue += total(c);
+    row.variance += Math.abs(variance(c));
+    map.set(key, row);
+  });
+  $("sellerStats").innerHTML = [...map.entries()].map(([id, r]) => `
+    <tr><td>${seller(id).name}</td><td>${r.count}</td><td>${money(r.revenue)}</td><td>${money(r.variance / r.count)}</td></tr>
+  `).join("") || `<tr><td colspan="4">Ni podatkov.</td></tr>`;
+}
+
+function filteredClosings() {
+  const from = $("fromDate").value;
+  const to = $("toDate").value;
+  const storeId = $("filterStore").value;
+  const sellerId = $("filterSeller").value;
+  return visibleClosings()
+    .filter((c) => !from || c.closing_date >= from)
+    .filter((c) => !to || c.closing_date <= to)
+    .filter((c) => storeId === "all" || c.store_id === storeId)
+    .filter((c) => sellerId === "all" || c.seller_id === sellerId)
+    .sort((a, b) => b.closing_date.localeCompare(a.closing_date));
+}
+
+function renderReports() {
+  const rows = filteredClosings();
+  const sums = {
+    revenue: rows.reduce((s, c) => s + total(c), 0),
+    cash: rows.reduce((s, c) => s + Number(c.cash_sales), 0),
+    cards: rows.reduce((s, c) => s + Number(c.card_sales), 0),
+    variance: rows.reduce((s, c) => s + variance(c), 0)
+  };
+  $("reportTotals").innerHTML = `
+    <article><span>Promet</span><strong>${money(sums.revenue)}</strong></article>
+    <article><span>Gotovina</span><strong>${money(sums.cash)}</strong></article>
+    <article><span>Kartice</span><strong>${money(sums.cards)}</strong></article>
+    <article class="warn"><span>Odstopanje</span><strong>${money(sums.variance)}</strong></article>
+  `;
+  $("closingRows").innerHTML = rows.map((c) => `
+    <tr>
+      <td>${c.closing_date}</td>
+      <td>${store(c.store_id).name}</td>
+      <td>${seller(c.seller_id).name}</td>
+      <td><span class="badge ${c.status === "approved" ? "ok" : ""}">${c.status === "approved" ? "potrjeno" : "osnutek"}</span></td>
+      <td>${money(total(c))}</td>
+      <td>${money(variance(c))}</td>
+      <td class="actions">
+        ${c.status !== "approved" ? `<button class="secondary" data-edit-closing="${c.id}">Popravi</button><button class="primary" data-approve="${c.id}">Potrdi</button><button class="danger" data-delete="${c.id}">Izbriši</button>` : `<button class="secondary" data-view-closing="${c.id}">Ogled</button>`}
+      </td>
+    </tr>
+  `).join("") || `<tr><td colspan="7">Ni podatkov.</td></tr>`;
+}
+
+function renderAdminTables() {
+  if (!canManage()) {
+    $("storeRows").innerHTML = `<tr><td colspan="5">Za urejanje nastavitev moraš biti administrator ali računovodstvo.</td></tr>`;
+    $("userRows").innerHTML = `<tr><td colspan="5">Za urejanje nastavitev moraš biti administrator ali računovodstvo.</td></tr>`;
+    return;
+  }
+  $("storeRows").innerHTML = state.stores.map((s) => {
+    const count = state.closings.filter((c) => c.store_id === s.id).length;
+    return `<tr>
+      <td>${s.name}</td><td>${s.city}</td><td>${s.manager}</td><td>${count}</td>
+      <td class="actions"><button class="secondary" data-edit-store="${s.id}">Uredi</button><button class="danger" data-delete-store="${s.id}" ${count ? "disabled" : ""}>Izbriši</button></td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="5">Ni trgovin.</td></tr>`;
+
+  $("userRows").innerHTML = state.users.map((u) => {
+    const canDelete = u.id !== currentUser.id;
+    return `<tr>
+      <td>${u.name}</td><td>${u.role}</td><td>${u.store_id ? store(u.store_id).name : "Vse trgovine"}</td><td>${u.active ? "aktiven" : "neaktiven"}</td>
+      <td class="actions"><button class="secondary" data-edit-user="${u.id}">Uredi</button><button class="danger" data-delete-user="${u.id}" ${canDelete ? "" : "disabled"}>${u.active ? "Deaktiviraj" : "Odstrani"}</button></td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="5">Ni uporabnikov.</td></tr>`;
+}
+
+function renderAudit() {
+  $("auditList").innerHTML = state.audit.map((a) => `
+    <div class="audit-row"><strong>${a.action}</strong><span>${a.user_name}</span><span>${new Date(a.created_at).toLocaleString("sl-SI")}</span></div>
+  `).join("") || `<p>Ni revizijskih zapisov.</p>`;
+}
+
+async function filesToPayload(files) {
+  return Promise.all([...files].map((file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve({ name: file.name, mime: file.type, data_url: reader.result });
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  })));
+}
+
+async function saveClosing(e) {
+  e.preventDefault();
+  const payload = {
+    user: currentUser,
+    id: $("closingId").value || undefined,
+    store_id: $("storeId").value,
+    seller_id: $("sellerId").value,
+    closing_date: $("closingDate").value,
+    opening_cash: num("openingCash"),
+    cash_sales: num("cashSales"),
+    card_sales: num("cardSales"),
+    other_sales: num("otherSales"),
+    refunds: num("refunds"),
+    deposit: num("deposit"),
+    counted_cash: num("countedCash"),
+    card_statement: num("cardStatement"),
+    notes: $("notes").value,
+    attachments: await filesToPayload($("attachments").files)
+  };
+  await api("/api/closings", payload);
+  resetClosingForm();
+  calcForm();
+  await refresh();
+  setView("reports");
 }
 
 function resetClosingForm() {
-  elements.closingForm.reset();
-  elements.closingId.value = "";
-  elements.closingDate.value = todayIso();
-  elements.otherSales.value = "0";
-  elements.refunds.value = "0";
-  elements.deposit.value = "0";
-  setClosingFormLocked(false);
-  renderStoreOptions();
-  renderCalculations();
+  $("closingForm").reset();
+  $("closingId").value = "";
+  $("closingDate").value = today();
+  enableClosingForm(true);
 }
 
-function setClosingFormLocked(locked, closing = null) {
-  const fields = [
-    "storeId",
-    "closingDate",
-    "openingCash",
-    "cashSales",
-    "cardSales",
-    "otherSales",
-    "refunds",
-    "deposit",
-    "countedCash",
-    "cardStatement",
-    "notes",
-    "attachments"
-  ];
-  fields.forEach((id) => {
-    elements[id].disabled = locked;
+function enableClosingForm(enabled) {
+  ["storeId", "sellerId", "closingDate", "openingCash", "cashSales", "cardSales", "otherSales", "refunds", "deposit", "countedCash", "cardStatement", "notes", "attachments"].forEach((id) => {
+    $(id).disabled = !enabled;
   });
-  elements.closingSubmitBtn.disabled = locked;
-  elements.closingStatus.textContent = locked
-    ? `Zaključek je potrjen in zaklenjen. Potrdil: ${closing?.approvedBy || "neznano"}.`
-    : "";
-  elements.closingStatus.classList.toggle("visible", locked);
+  $("closingForm").querySelector('button[type="submit"]').disabled = !enabled;
+}
+
+function editClosing(id, viewOnly = false) {
+  const c = state.closings.find((item) => item.id === id);
+  if (!c) return;
+  setView("closing");
+  $("closingId").value = c.id;
+  $("storeId").value = c.store_id;
+  $("sellerId").value = c.seller_id;
+  $("closingDate").value = c.closing_date;
+  $("openingCash").value = c.opening_cash;
+  $("cashSales").value = c.cash_sales;
+  $("cardSales").value = c.card_sales;
+  $("otherSales").value = c.other_sales;
+  $("refunds").value = c.refunds;
+  $("deposit").value = c.deposit;
+  $("countedCash").value = c.counted_cash;
+  $("cardStatement").value = c.card_statement;
+  $("notes").value = c.notes || "";
+  enableClosingForm(!viewOnly && c.status !== "approved");
+  calcForm();
+}
+
+function setView(name) {
+  document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === name));
+  document.querySelectorAll(".nav").forEach((n) => n.classList.toggle("active", n.dataset.view === name));
+  const titles = {
+    dashboard: ["Pregled", "Sinhroniziran pregled vseh trgovin v SQLite bazi."],
+    closing: ["Zaključek", "Dnevni vnos prometa, štetja in dokazil."],
+    reports: ["Poročila", "PDF/print poročila, filtri in potrjevanje."],
+    tris: ["TRIS uvoz", "Uvoz dnevnih zaključkov iz TRIS CSV izvoza."],
+    settings: ["Nastavitve", "Trgovine, prodajalke in revizijska sled."]
+  };
+  $("title").textContent = titles[name][0];
+  $("subtitle").textContent = titles[name][1];
+  render();
+}
+
+async function saveStore(e) {
+  e.preventDefault();
+  if (!canManage()) return alert("Samo administrator ali računovodstvo lahko ureja trgovine.");
+  await api("/api/stores", { user: currentUser, id: $("editStoreId").value || undefined, name: $("storeName").value, city: $("storeCity").value, manager: $("storeManager").value });
+  resetStoreForm();
+  await refresh();
+}
+
+async function saveUser(e) {
+  e.preventDefault();
+  if (!canManage()) return alert("Samo administrator ali računovodstvo lahko ureja uporabnike.");
+  await api("/api/users", { user: currentUser, id: $("editUserId").value || undefined, name: $("userName").value, pin: $("userPin").value, role: $("userRole").value, store_id: $("userStore").value || null });
+  resetUserForm();
+  await refresh();
 }
 
 function resetStoreForm() {
-  elements.storeForm.reset();
-  elements.storeEditId.value = "";
-  elements.storeFormTitle.textContent = "Dodaj trgovino";
-  elements.storeSubmitBtn.textContent = "Dodaj trgovino";
+  $("storeForm").reset();
+  $("editStoreId").value = "";
 }
 
 function resetUserForm() {
-  elements.userForm.reset();
-  elements.userEditId.value = "";
-  elements.userFormTitle.textContent = "Dodaj uporabnika";
-  elements.userSubmitBtn.textContent = "Dodaj uporabnika";
-}
-
-async function saveClosing(event) {
-  event.preventDefault();
-  if (!elements.storeId.value) {
-    alert("Najprej dodaj trgovino ali izberi uporabnika, ki ima dostop do trgovine.");
-    return;
-  }
-  const existing = state.closings.find((closing) => closing.id === elements.closingId.value);
-  if (existing && existing.status === "approved") {
-    alert("Potrjenega zaključka ni mogoče spreminjati.");
-    return;
-  }
-  const duplicate = state.closings.find(
-    (closing) =>
-      closing.storeId === elements.storeId.value &&
-      closing.date === elements.closingDate.value &&
-      closing.id !== elements.closingId.value
-  );
-  if (duplicate) {
-    alert("Za to trgovino in datum zaključek že obstaja. Odpri obstoječi zaključek in ga popravi.");
-    return;
-  }
-
-  const calc = closingCalculationsFromForm();
-  const attachments = await filesToAttachments(elements.attachments.files);
-  const user = currentUser();
-  const closing = {
-    id: elements.closingId.value || crypto.randomUUID(),
-    storeId: elements.storeId.value,
-    date: elements.closingDate.value,
-    openingCash: numberValue("openingCash"),
-    cashSales: numberValue("cashSales"),
-    cardSales: numberValue("cardSales"),
-    otherSales: numberValue("otherSales"),
-    refunds: numberValue("refunds"),
-    deposit: numberValue("deposit"),
-    countedCash: numberValue("countedCash"),
-    cardStatement: numberValue("cardStatement"),
-    expectedCash: calc.expectedCash,
-    cashVariance: calc.cashVariance,
-    cardVariance: calc.cardVariance,
-    notes: elements.notes.value.trim(),
-    attachments: attachments.length ? attachments : existing?.attachments || [],
-    status: existing?.status || "draft",
-    createdBy: existing?.createdBy || user.id,
-    createdByName: existing?.createdByName || user.name,
-    createdAt: existing?.createdAt || new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-
-  state.closings = existing
-    ? state.closings.map((item) => (item.id === closing.id ? closing : item))
-    : [closing, ...state.closings];
-  addAudit(existing ? "updated" : "created", closing.id);
-  saveState();
-  resetClosingForm();
-  setView("dashboard");
-}
-
-function addAudit(action, closingId) {
-  state.audit.unshift({
-    id: crypto.randomUUID(),
-    action,
-    closingId,
-    userId: currentUser().id,
-    userName: currentUser().name,
-    createdAt: new Date().toISOString()
-  });
-}
-
-function approveClosing(id) {
-  if (!canApprove()) {
-    alert("Ta uporabnik nima pravice potrjevanja.");
-    return;
-  }
-  state.closings = state.closings.map((closing) =>
-    closing.id === id
-      ? { ...closing, status: "approved", approvedBy: currentUser().name, approvedAt: new Date().toISOString() }
-      : closing
-  );
-  addAudit("approved", id);
-  saveState();
-  render();
-}
-
-function deleteClosing(id) {
-  const closing = state.closings.find((item) => item.id === id);
-  if (!closing || closing.status === "approved") return;
-  if (!confirm("Izbrišem ta osnutek zaključka? Potrjenih zaključkov ni mogoče izbrisati.")) return;
-  state.closings = state.closings.filter((item) => item.id !== id);
-  addAudit("deleted", id);
-  saveState();
-  render();
-}
-
-function viewAttachments(id) {
-  const closing = state.closings.find((item) => item.id === id);
-  if (!closing || !closing.attachments.length) return;
-  const win = window.open("", "_blank");
-  if (!win) {
-    alert("Brskalnik je blokiral novo okno za dokazila.");
-    return;
-  }
-  const files = closing.attachments
-    .map((file) => {
-      const safeName = escapeHtml(file.name);
-      if (file.type?.startsWith("image/")) {
-        return `<article><h2>${safeName}</h2><img src="${file.dataUrl}" alt="${safeName}"></article>`;
-      }
-      if (file.type === "application/pdf") {
-        return `<article><h2>${safeName}</h2><iframe src="${file.dataUrl}" title="${safeName}"></iframe></article>`;
-      }
-      return `<article><h2>${safeName}</h2><a href="${file.dataUrl}" download="${safeName}">Prenesi dokazilo</a></article>`;
-    })
-    .join("");
-  win.document.write(`<!doctype html><html lang="sl"><head><meta charset="utf-8"><title>Dokazila</title><style>body{font-family:Arial,sans-serif;margin:24px;background:#f4f6f8;color:#1e252c}article{background:white;border:1px solid #dfe5ea;border-radius:8px;margin-bottom:16px;padding:16px}img{max-width:100%;height:auto}iframe{width:100%;height:80vh;border:1px solid #dfe5ea}</style></head><body><h1>Dokazila: ${escapeHtml(storeName(closing.storeId))} ${closing.date}</h1>${files}</body></html>`);
-  win.document.close();
-}
-
-function editClosing(id) {
-  const closing = state.closings.find((item) => item.id === id);
-  if (!closing) return;
-  setView("closing");
-  elements.closingId.value = closing.id;
-  elements.storeId.value = closing.storeId;
-  elements.closingDate.value = closing.date;
-  elements.openingCash.value = closing.openingCash;
-  elements.cashSales.value = closing.cashSales;
-  elements.cardSales.value = closing.cardSales;
-  elements.otherSales.value = closing.otherSales;
-  elements.refunds.value = closing.refunds;
-  elements.deposit.value = closing.deposit;
-  elements.countedCash.value = closing.countedCash;
-  elements.cardStatement.value = closing.cardStatement;
-  elements.notes.value = closing.notes;
-  elements.attachments.value = "";
-  setClosingFormLocked(closing.status === "approved", closing);
-  renderCalculations();
-}
-
-function saveStore(event) {
-  event.preventDefault();
-  if (!canManageSettings()) {
-    alert("Samo administrator ali računovodstvo lahko ureja trgovine.");
-    return;
-  }
-  const id = elements.storeEditId.value || crypto.randomUUID();
-  const name = document.querySelector("#storeName").value.trim();
-  const city = document.querySelector("#storeCity").value.trim();
-  const duplicate = state.stores.find((store) => store.id !== id && store.name.toLowerCase() === name.toLowerCase() && store.city.toLowerCase() === city.toLowerCase());
-  if (duplicate) {
-    alert("Trgovina s tem nazivom in mestom že obstaja.");
-    return;
-  }
-  const store = {
-    id,
-    name: document.querySelector("#storeName").value.trim(),
-    city: document.querySelector("#storeCity").value.trim(),
-    manager: document.querySelector("#storeManager").value.trim()
-  };
-  state.stores = elements.storeEditId.value
-    ? state.stores.map((item) => (item.id === id ? store : item))
-    : [...state.stores, store];
-  addAudit(elements.storeEditId.value ? "store_updated" : "store_created", id);
-  resetStoreForm();
-  saveState();
-  render();
+  $("userForm").reset();
+  $("editUserId").value = "";
+  $("userPin").required = true;
 }
 
 function editStore(id) {
-  const store = state.stores.find((item) => item.id === id);
-  if (!store) return;
-  elements.storeEditId.value = store.id;
-  document.querySelector("#storeName").value = store.name;
-  document.querySelector("#storeCity").value = store.city;
-  document.querySelector("#storeManager").value = store.manager;
-  elements.storeFormTitle.textContent = "Uredi trgovino";
-  elements.storeSubmitBtn.textContent = "Shrani spremembe";
-}
-
-function saveUser(event) {
-  event.preventDefault();
-  if (!canManageSettings()) {
-    alert("Samo administrator ali računovodstvo lahko dodaja uporabnike.");
-    return;
-  }
-  const storeAccess = elements.userStoreAccess.value;
-  const id = elements.userEditId.value || crypto.randomUUID();
-  const user = {
-    id,
-    name: document.querySelector("#userName").value.trim(),
-    role: document.querySelector("#userRole").value,
-    storeIds: storeAccess === "all" ? ["all"] : [storeAccess]
-  };
-  state.users = elements.userEditId.value
-    ? state.users.map((item) => (item.id === id ? user : item))
-    : [...state.users, user];
-  addAudit(elements.userEditId.value ? "user_updated" : "user_created", id);
-  resetUserForm();
-  saveState();
-  render();
+  const s = state.stores.find((item) => item.id === id);
+  if (!s) return;
+  setView("settings");
+  $("editStoreId").value = s.id;
+  $("storeName").value = s.name;
+  $("storeCity").value = s.city;
+  $("storeManager").value = s.manager;
+  $("storeName").focus();
 }
 
 function editUser(id) {
-  const user = state.users.find((item) => item.id === id);
-  if (!user) return;
-  elements.userEditId.value = user.id;
-  document.querySelector("#userName").value = user.name;
-  document.querySelector("#userRole").value = user.role;
-  elements.userStoreAccess.value = user.storeIds.includes("all") ? "all" : user.storeIds[0] || "all";
-  elements.userFormTitle.textContent = "Uredi uporabnika";
-  elements.userSubmitBtn.textContent = "Shrani spremembe";
+  const u = state.users.find((item) => item.id === id);
+  if (!u) return;
+  setView("settings");
+  $("editUserId").value = u.id;
+  $("userName").value = u.name;
+  $("userRole").value = u.role;
+  $("userStore").value = u.store_id || "";
+  $("userPin").value = "";
+  $("userPin").required = false;
+  $("userName").focus();
 }
 
-function deleteStore(id) {
-  if (!canManageSettings()) {
-    alert("Samo administrator ali računovodstvo lahko odstrani trgovino.");
-    return;
-  }
-  const hasClosings = state.closings.some((closing) => closing.storeId === id);
-  const message = hasClosings
-    ? "Ta trgovina ima zaključke. Če jo odstraniš, se izbrišejo tudi njeni zaključki. Nadaljujem?"
-    : "Odstranim to trgovino?";
-  if (!confirm(message)) return;
-  state.stores = state.stores.filter((store) => store.id !== id);
-  state.closings = state.closings.filter((closing) => closing.storeId !== id);
-  state.users = state.users.map((user) => {
-    if (user.storeIds.includes("all")) return user;
-    return { ...user, storeIds: user.storeIds.filter((storeId) => storeId !== id) };
-  });
-  addAudit("store_deleted", id);
-  saveState();
-  resetStoreForm();
-  resetClosingForm();
-  render();
-}
-
-function deleteUser(id) {
-  if (!canManageSettings()) {
-    alert("Samo administrator ali računovodstvo lahko odstrani uporabnika.");
-    return;
-  }
-  if (id === state.activeUserId || state.users.length === 1) return;
-  if (!confirm("Odstranim tega uporabnika? Zaključki, ki jih je že vnesel, ostanejo v zgodovini.")) return;
-  state.users = state.users.filter((user) => user.id !== id);
-  addAudit("user_deleted", id);
-  saveState();
-  resetUserForm();
-  render();
-}
-
-function clearAllBusinessData() {
-  if (!confirm("To izbriše vse trgovine, zaključke, dokazila in demo podatke v tem brskalniku. Uporabniki ostanejo. Nadaljujem?")) return;
-  state = {
-    ...structuredClone(defaultState),
-    activeUserId: state.activeUserId,
-    stores: [],
-    closings: [],
-    audit: []
-  };
-  saveState();
-  resetClosingForm();
-  render();
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function seedData() {
-  const demoStores = structuredClone(defaultState.stores);
-  demoStores.forEach((store) => {
-    if (!state.stores.some((existing) => existing.id === store.id)) {
-      state.stores.push(store);
-    }
-  });
-
-  const demoClosings = [
-    {
-      storeId: "s-lj",
-      date: todayIso(),
-      openingCash: 150,
-      cashSales: 842.4,
-      cardSales: 1288.9,
-      otherSales: 62,
-      refunds: 34.9,
-      deposit: 700,
-      countedCash: 257.5,
-      cardStatement: 1288.9,
-      notes: "Reden zaključek.",
-      status: "draft"
-    },
-    {
-      storeId: "s-mb",
-      date: todayIso(),
-      openingCash: 120,
-      cashSales: 518.2,
-      cardSales: 934.1,
-      otherSales: 25,
-      refunds: 19.5,
-      deposit: 480,
-      countedCash: 138.7,
-      cardStatement: 930.1,
-      notes: "POS izpisek ima razliko 4 EUR.",
-      status: "draft"
-    },
-    {
-      storeId: "s-lj",
-      date: todayIso(-1),
-      openingCash: 150,
-      cashSales: 762.2,
-      cardSales: 1120.45,
-      otherSales: 47,
-      refunds: 22,
-      deposit: 720,
-      countedCash: 170.2,
-      cardStatement: 1120.45,
-      notes: "Potrjeno brez pripomb.",
-      status: "approved"
-    }
-  ].map((item) => {
-    const expectedCash = expectedCashFor(item);
-    return {
-      ...item,
-      id: crypto.randomUUID(),
-      expectedCash,
-      cashVariance: item.countedCash - expectedCash,
-      cardVariance: item.cardStatement - item.cardSales,
-      attachments: [{ name: "demo-z-izpisek.txt", type: "text/plain", size: 0, dataUrl: "" }],
-      createdBy: currentUser().id,
-      createdByName: currentUser().name,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-  });
-
-  state.closings = [...demoClosings, ...state.closings];
-  saveState();
-  render();
-}
-
-function exportCsv() {
-  const rows = filteredClosings();
-  const header = ["datum", "trgovina", "status", "promet", "gotovina", "kartice", "drugo", "vracila", "polog", "odstopanje_gotovina", "odstopanje_kartice", "opombe"];
-  const lines = [header.join(";")].concat(
-    rows.map((closing) =>
-      [
-        closing.date,
-        storeName(closing.storeId),
-        closing.status,
-        totalSales(closing).toFixed(2),
-        closing.cashSales.toFixed(2),
-        closing.cardSales.toFixed(2),
-        closing.otherSales.toFixed(2),
-        closing.refunds.toFixed(2),
-        closing.deposit.toFixed(2),
-        closing.cashVariance.toFixed(2),
-        closing.cardVariance.toFixed(2),
-        `"${closing.notes.replaceAll('"', '""')}"`
-      ].join(";")
-    )
-  );
-  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `blagajne-porocilo-${todayIso()}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-function downloadFile(filename, content, type) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-function exportJson() {
-  const payload = {
-    exportedAt: new Date().toISOString(),
-    app: "blagajne-faza-1-2",
-    version: 2,
-    data: state
-  };
-  downloadFile(`blagajne-backup-${todayIso()}.json`, JSON.stringify(payload, null, 2), "application/json;charset=utf-8");
-}
-
-function importJson(file) {
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const parsed = JSON.parse(reader.result);
-      const imported = parsed.data || parsed;
-      if (!Array.isArray(imported.users) || !Array.isArray(imported.stores) || !Array.isArray(imported.closings)) {
-        throw new Error("Invalid backup");
-      }
-      if (!confirm("Uvoz bo zamenjal trenutne podatke v tem brskalniku. Nadaljujem?")) return;
-      state = normalizeState(imported);
-      if (!state.users.some((user) => user.id === state.activeUserId)) {
-        state.activeUserId = state.users[0]?.id || "u-owner";
-      }
-      saveState();
-      resetClosingForm();
-      render();
-    } catch {
-      alert("Datoteka ni veljaven backup za ta program.");
-    } finally {
-      elements.importJsonFile.value = "";
-    }
-  };
-  reader.readAsText(file);
-}
-
-function setCurrentMonthFilter() {
-  const month = todayIso().slice(0, 7);
-  elements.filterMonth.value = month;
-  elements.filterFrom.value = `${month}-01`;
-  const end = dateIsoLocal(new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0));
-  elements.filterTo.value = end;
+function setMonth() {
+  const month = today().slice(0, 7);
+  $("fromDate").value = `${month}-01`;
+  $("toDate").value = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).toLocaleDateString("sv-SE");
   renderReports();
 }
 
-function applyMonthInput() {
-  if (!elements.filterMonth.value) return;
-  const month = elements.filterMonth.value;
-  elements.filterFrom.value = `${month}-01`;
-  elements.filterTo.value = dateIsoLocal(new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0));
-  renderReports();
+async function importTris() {
+  const result = await api("/api/import-tris", { user: currentUser, csv: $("trisCsv").value });
+  $("trisResult").textContent = JSON.stringify(result, null, 2);
+  await refresh();
 }
 
-elements.navItems.forEach((item) => item.addEventListener("click", () => setView(item.dataset.view)));
-elements.quickCloseBtn.addEventListener("click", () => setView("closing"));
-elements.seedDataBtn.addEventListener("click", seedData);
-elements.backupBtn.addEventListener("click", exportJson);
-elements.activeUser.addEventListener("change", (event) => {
-  state.activeUserId = event.target.value;
-  saveState();
-  render();
+document.addEventListener("click", async (e) => {
+  if (e.target.matches(".nav")) setView(e.target.dataset.view);
+  if (e.target.id === "logoutBtn") {
+    localStorage.removeItem("b3-user");
+    currentUser = null;
+    $("loginView").classList.remove("hidden");
+    $("appView").classList.add("hidden");
+  }
+  if (e.target.id === "refreshBtn") await refresh();
+  if (e.target.id === "newStoreBtn") resetStoreForm();
+  if (e.target.id === "newUserBtn") resetUserForm();
+  if (e.target.id === "monthBtn") setMonth();
+  if (e.target.id === "printBtn") window.print();
+  if (e.target.id === "importTrisBtn") importTris().catch((err) => alert(err.message));
+  if (e.target.dataset.approve) {
+    await api("/api/approve", { user: currentUser, id: e.target.dataset.approve });
+    await refresh();
+  }
+  if (e.target.dataset.editClosing) editClosing(e.target.dataset.editClosing);
+  if (e.target.dataset.viewClosing) editClosing(e.target.dataset.viewClosing, true);
+  if (e.target.dataset.delete) {
+    if (confirm("Izbrišem osnutek zaključka?")) {
+      await api("/api/delete-closing", { user: currentUser, id: e.target.dataset.delete });
+      await refresh();
+    }
+  }
+  if (e.target.dataset.editStore) editStore(e.target.dataset.editStore);
+  if (e.target.dataset.editUser) editUser(e.target.dataset.editUser);
+  if (e.target.dataset.deleteStore) {
+    if (confirm("Izbrišem trgovino? To je možno samo, če še nima zaključkov.")) {
+      await api("/api/delete-store", { user: currentUser, id: e.target.dataset.deleteStore }).catch((err) => alert(err.message));
+      await refresh();
+    }
+  }
+  if (e.target.dataset.deleteUser) {
+    if (confirm("Deaktiviram ali izbrišem uporabnika? Zaključki v zgodovini ostanejo.")) {
+      await api("/api/delete-user", { user: currentUser, id: e.target.dataset.deleteUser }).catch((err) => alert(err.message));
+      await refresh();
+    }
+  }
 });
-elements.closingForm.addEventListener("submit", saveClosing);
-elements.storeForm.addEventListener("submit", saveStore);
-elements.userForm.addEventListener("submit", saveUser);
-elements.resetFormBtn.addEventListener("click", resetClosingForm);
-elements.cancelStoreEditBtn.addEventListener("click", resetStoreForm);
-elements.cancelUserEditBtn.addEventListener("click", resetUserForm);
-elements.exportCsvBtn.addEventListener("click", exportCsv);
-elements.exportJsonBtn.addEventListener("click", exportJson);
-elements.importJsonBtn.addEventListener("click", () => elements.importJsonFile.click());
-elements.importJsonFile.addEventListener("change", (event) => importJson(event.target.files[0]));
-elements.monthFilterBtn.addEventListener("click", setCurrentMonthFilter);
-elements.printReportBtn.addEventListener("click", () => window.print());
-elements.clearDataBtn.addEventListener("click", clearAllBusinessData);
-elements.reportRows.addEventListener("click", (event) => {
-  const editId = event.target.dataset.edit;
-  const deleteId = event.target.dataset.deleteClosing;
-  if (editId) editClosing(editId);
-  if (deleteId) deleteClosing(deleteId);
-});
-elements.storeList.addEventListener("click", (event) => {
-  const editId = event.target.dataset.editStore;
-  const deleteId = event.target.dataset.deleteStore;
-  if (editId) editStore(editId);
-  if (deleteId) deleteStore(deleteId);
-});
-elements.userList.addEventListener("click", (event) => {
-  const editId = event.target.dataset.editUser;
-  const deleteId = event.target.dataset.deleteUser;
-  if (editId) editUser(editId);
-  if (deleteId) deleteUser(deleteId);
-});
+
 ["openingCash", "cashSales", "cardSales", "otherSales", "refunds", "deposit", "countedCash", "cardStatement"].forEach((id) => {
-  elements[id].addEventListener("input", renderCalculations);
+  $(id).addEventListener("input", calcForm);
 });
-elements.filterMonth.addEventListener("change", applyMonthInput);
-["filterFrom", "filterTo", "filterStore", "filterStatus"].forEach((id) => {
-  elements[id].addEventListener("change", renderReports);
-});
+["fromDate", "toDate", "filterStore", "filterSeller"].forEach((id) => $(id).addEventListener("change", renderReports));
 
+$("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("loginError").textContent = "";
+  try {
+    const data = await api("/api/login", { pin: $("pinInput").value });
+    currentUser = data.user;
+    localStorage.setItem("b3-user", JSON.stringify(currentUser));
+    $("loginView").classList.add("hidden");
+    $("appView").classList.remove("hidden");
+    await refresh();
+  } catch (err) {
+    $("loginError").textContent = err.message;
+  }
+});
+$("closingForm").addEventListener("submit", (e) => saveClosing(e).catch((err) => alert(err.message)));
+$("storeForm").addEventListener("submit", (e) => saveStore(e).catch((err) => alert(err.message)));
+$("userForm").addEventListener("submit", (e) => saveUser(e).catch((err) => alert(err.message)));
+$("trisFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (file) $("trisCsv").value = await file.text();
+});
 resetClosingForm();
-render();
+setMonth();
+calcForm();
+if (currentUser) {
+  $("loginView").classList.add("hidden");
+  $("appView").classList.remove("hidden");
+  refresh();
+}

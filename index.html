@@ -3,364 +3,175 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Blagajne | Zaključki trgovin</title>
+    <title>Blagajne Faza 3</title>
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <div class="app-shell">
+    <section class="login" id="loginView">
+      <form class="login-card" id="loginForm">
+        <div class="brand-row"><span>B3</span><strong>Blagajne Faza 3</strong></div>
+        <h1>PIN prijava</h1>
+        <p>Demo PIN: 1234 administrator, 1111 poslovodja, 3333 blagajnik.</p>
+        <input id="pinInput" inputmode="numeric" maxlength="8" type="password" placeholder="Vnesi PIN" required>
+        <button class="primary" type="submit">Prijava</button>
+        <div class="error" id="loginError"></div>
+      </form>
+    </section>
+
+    <div class="app hidden" id="appView">
       <aside class="sidebar">
-        <div class="brand">
-          <span class="brand-mark">B</span>
-          <div>
-            <strong>Blagajne</strong>
-            <small>več lokacij</small>
-          </div>
-        </div>
-
-        <nav class="nav" aria-label="Glavna navigacija">
-          <button class="nav-item active" data-view="dashboard">Pregled</button>
-          <button class="nav-item" data-view="closing">Nov zaključek</button>
-          <button class="nav-item" data-view="approvals">Potrditve</button>
-          <button class="nav-item" data-view="reports">Poročila</button>
-          <button class="nav-item" data-view="settings">Nastavitve</button>
+        <div class="brand-row"><span>B3</span><strong>Blagajne</strong></div>
+        <nav>
+          <button class="nav active" data-view="dashboard">Pregled</button>
+          <button class="nav" data-view="closing">Zaključek</button>
+          <button class="nav" data-view="reports">Poročila</button>
+          <button class="nav" data-view="tris">TRIS uvoz</button>
+          <button class="nav" data-view="settings">Nastavitve</button>
         </nav>
-
-        <div class="sidebar-card">
-          <label for="activeUser">Prijavljen uporabnik</label>
-          <select id="activeUser"></select>
-          <p id="activeRole"></p>
+        <div class="userbox">
+          <strong id="currentUserName"></strong>
+          <span id="currentUserRole"></span>
+          <button class="secondary" id="logoutBtn">Odjava</button>
         </div>
       </aside>
 
-      <main class="workspace">
+      <main>
         <header class="topbar">
           <div>
-            <h1 id="viewTitle">Pregled</h1>
-            <p id="viewSubtitle">Dnevni promet, zaključki in odstopanja po trgovinah.</p>
+            <h1 id="title">Pregled</h1>
+            <p id="subtitle">Sinhroniziran pregled vseh trgovin v SQLite bazi.</p>
           </div>
-          <div class="topbar-actions">
-            <button class="secondary" id="seedDataBtn">Naloži demo</button>
-            <button class="secondary" id="backupBtn">Backup</button>
-            <button class="primary" id="quickCloseBtn">Nov zaključek</button>
-          </div>
+          <button class="secondary" id="refreshBtn">Osveži</button>
         </header>
 
-        <section class="view active" id="dashboardView">
-          <div class="metric-grid">
-            <article class="metric">
-              <span>Današnji promet</span>
-              <strong id="todayRevenue">0,00 €</strong>
-            </article>
-            <article class="metric">
-              <span>Gotovina danes</span>
-              <strong id="todayCash">0,00 €</strong>
-            </article>
-            <article class="metric">
-              <span>Kartice danes</span>
-              <strong id="todayCards">0,00 €</strong>
-            </article>
-            <article class="metric alert">
-              <span>Odprta odstopanja</span>
-              <strong id="openVariance">0,00 €</strong>
-            </article>
+        <section class="view active" id="dashboard">
+          <div class="metrics">
+            <article><span>Promet danes</span><strong id="mRevenue">0,00 €</strong></article>
+            <article><span>Gotovina danes</span><strong id="mCash">0,00 €</strong></article>
+            <article><span>Kartice danes</span><strong id="mCards">0,00 €</strong></article>
+            <article class="warn"><span>Odstopanja</span><strong id="mVariance">0,00 €</strong></article>
           </div>
-
           <section class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>Lokacije danes</h2>
-                <p>Stanje zaključevanja po trgovinah.</p>
-              </div>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Trgovina</th>
-                    <th>Status</th>
-                    <th>Promet</th>
-                    <th>Gotovina</th>
-                    <th>Kartice</th>
-                    <th>Odstopanje</th>
-                  </tr>
-                </thead>
-                <tbody id="storeTodayRows"></tbody>
-              </table>
-            </div>
+            <div class="panel-head"><h2>Graf prometa po trgovinah</h2></div>
+            <div class="bars" id="storeChart"></div>
           </section>
-
           <section class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>Zadnji zaključki</h2>
-                <p>Najnovejši vnosi iz vseh lokacij.</p>
-              </div>
-            </div>
-            <div class="closing-list" id="recentClosings"></div>
+            <div class="panel-head"><h2>Statistika po prodajalkah</h2></div>
+            <table>
+              <thead><tr><th>Prodajalka</th><th>Zaključkov</th><th>Promet</th><th>Povp. odstopanje</th></tr></thead>
+              <tbody id="sellerStats"></tbody>
+            </table>
           </section>
         </section>
 
-        <section class="view" id="closingView">
+        <section class="view" id="closing">
           <form class="panel form-grid" id="closingForm">
             <input type="hidden" id="closingId">
-            <div class="form-section span-2">
-              <h2>Dnevni zaključek blagajne</h2>
-              <p>Vnos prometa, štetja gotovine in dokazil za izbrani dan.</p>
-            </div>
-
-            <label>
-              Trgovina
-              <select id="storeId" required></select>
-            </label>
-            <label>
-              Datum
-              <input id="closingDate" type="date" required>
-            </label>
-            <label>
-              Začetno stanje gotovine
-              <input id="openingCash" type="number" step="0.01" min="0" required>
-            </label>
-            <label>
-              Gotovinski promet
-              <input id="cashSales" type="number" step="0.01" min="0" required>
-            </label>
-            <label>
-              Kartični promet
-              <input id="cardSales" type="number" step="0.01" min="0" required>
-            </label>
-            <label>
-              Druga plačila
-              <input id="otherSales" type="number" step="0.01" min="0" value="0">
-            </label>
-            <label>
-              Vračila
-              <input id="refunds" type="number" step="0.01" min="0" value="0">
-            </label>
-            <label>
-              Polog v sef/banko
-              <input id="deposit" type="number" step="0.01" min="0" value="0">
-            </label>
-            <label>
-              Prešteta končna gotovina
-              <input id="countedCash" type="number" step="0.01" min="0" required>
-            </label>
-            <label>
-              POS izpisek kartic
-              <input id="cardStatement" type="number" step="0.01" min="0" required>
-            </label>
-            <label class="span-2">
-              Opombe
-              <textarea id="notes" rows="3" placeholder="Npr. razlog manjka, težava s POS terminalom, dodatna pojasnila"></textarea>
-            </label>
-            <label class="span-2 file-field">
-              Dokazila
-              <input id="attachments" type="file" multiple accept="image/*,.pdf">
-              <span id="attachmentHelp">Dodaj slike Z-izpiska, POS slipov ali PDF dokazila.</span>
-            </label>
-
-            <aside class="calculation span-2">
-              <div>
-                <span>Pričakovana gotovina</span>
-                <strong id="expectedCash">0,00 €</strong>
-              </div>
-              <div>
-                <span>Manjko / višek</span>
-                <strong id="cashVariance">0,00 €</strong>
-              </div>
-              <div>
-                <span>Razlika kartic</span>
-                <strong id="cardVariance">0,00 €</strong>
-              </div>
+            <label>Trgovina<select id="storeId" required></select></label>
+            <label>Prodajalka<select id="sellerId" required></select></label>
+            <label>Datum<input type="date" id="closingDate" required></label>
+            <label>Začetna gotovina<input type="number" id="openingCash" step="0.01" value="0"></label>
+            <label>Gotovina<input type="number" id="cashSales" step="0.01" value="0"></label>
+            <label>Kartice<input type="number" id="cardSales" step="0.01" value="0"></label>
+            <label>Drugo<input type="number" id="otherSales" step="0.01" value="0"></label>
+            <label>Vračila<input type="number" id="refunds" step="0.01" value="0"></label>
+            <label>Polog<input type="number" id="deposit" step="0.01" value="0"></label>
+            <label>Prešteta gotovina<input type="number" id="countedCash" step="0.01" value="0"></label>
+            <label>POS kartice<input type="number" id="cardStatement" step="0.01" value="0"></label>
+            <label class="span-2">Opombe<textarea id="notes" rows="3"></textarea></label>
+            <label class="span-2">Dokazila<input id="attachments" type="file" multiple accept="image/*,.pdf"></label>
+            <aside class="calc span-2">
+              <div><span>Pričakovana gotovina</span><strong id="expectedCash">0,00 €</strong></div>
+              <div><span>Manjko / višek</span><strong id="cashVariance">0,00 €</strong></div>
+              <div><span>Razlika kartic</span><strong id="cardVariance">0,00 €</strong></div>
             </aside>
-
-            <div class="lock-note span-2" id="closingStatus"></div>
-
-            <div class="form-actions span-2">
-              <button class="secondary" type="button" id="resetFormBtn">Počisti</button>
-              <button class="primary" id="closingSubmitBtn" type="submit">Shrani zaključek</button>
+            <div class="actions span-2">
+              <button class="secondary" type="reset">Počisti</button>
+              <button class="primary" type="submit">Shrani in sinhroniziraj</button>
             </div>
           </form>
         </section>
 
-        <section class="view" id="approvalsView">
+        <section class="view" id="reports">
           <section class="panel">
             <div class="panel-head">
-              <div>
-                <h2>Zaključki za potrditev</h2>
-                <p>Poslovodja ali centrala potrdi vnos in zaklene dnevno stanje.</p>
-              </div>
-            </div>
-            <div class="closing-list" id="approvalList"></div>
-          </section>
-        </section>
-
-        <section class="view" id="reportsView">
-          <section class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>Poročila</h2>
-                <p>Filtriranje zaključkov in izvoz za računovodstvo.</p>
-              </div>
-              <div class="topbar-actions">
-                <button class="secondary" id="monthFilterBtn" type="button">Ta mesec</button>
-                <button class="secondary" id="printReportBtn" type="button">Natisni</button>
-                <button class="primary" id="exportCsvBtn">Izvozi CSV</button>
+              <h2>PDF/print poročila</h2>
+              <div class="actions">
+                <button class="secondary" id="monthBtn">Ta mesec</button>
+                <button class="secondary" id="printBtn">PDF / Natisni</button>
               </div>
             </div>
             <div class="filters">
-              <label>
-                Od
-                <input type="date" id="filterFrom">
-              </label>
-              <label>
-                Do
-                <input type="date" id="filterTo">
-              </label>
-              <label>
-                Trgovina
-                <select id="filterStore"></select>
-              </label>
-              <label>
-                Status
-                <select id="filterStatus">
-                  <option value="all">Vsi</option>
-                  <option value="draft">V čakanju</option>
-                  <option value="approved">Potrjeno</option>
-                </select>
-              </label>
-              <label>
-                Mesec
-                <input type="month" id="filterMonth">
-              </label>
+              <label>Od<input type="date" id="fromDate"></label>
+              <label>Do<input type="date" id="toDate"></label>
+              <label>Trgovina<select id="filterStore"></select></label>
+              <label>Prodajalka<select id="filterSeller"></select></label>
             </div>
-            <div class="report-summary" id="reportSummary"></div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Datum</th>
-                    <th>Trgovina</th>
-                    <th>Status</th>
-                    <th>Promet</th>
-                    <th>Gotovina</th>
-                    <th>Kartice</th>
-                    <th>Odstopanje</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody id="reportRows"></tbody>
-              </table>
-            </div>
+            <div class="metrics compact" id="reportTotals"></div>
+            <table>
+              <thead><tr><th>Datum</th><th>Trgovina</th><th>Prodajalka</th><th>Status</th><th>Promet</th><th>Odstopanje</th><th></th></tr></thead>
+              <tbody id="closingRows"></tbody>
+            </table>
           </section>
         </section>
 
-        <section class="view" id="settingsView">
-          <div class="settings-layout">
+        <section class="view" id="tris">
+          <section class="panel">
+            <div class="panel-head"><h2>Avtomatski uvoz iz TRIS</h2></div>
+            <p>Uvozi CSV iz TRIS z glavo: datum;trgovina;prodajalka;zacetna_gotovina;gotovina;kartice;drugo;vracila;polog;presteta_gotovina;pos_kartice</p>
+            <textarea id="trisCsv" rows="10" placeholder="Prilepi TRIS CSV ali naloži datoteko"></textarea>
+            <div class="actions">
+              <input id="trisFile" type="file" accept=".csv,text/csv">
+              <button class="primary" id="importTrisBtn">Uvozi TRIS</button>
+            </div>
+            <pre id="trisResult"></pre>
+          </section>
+        </section>
+
+        <section class="view" id="settings">
+          <div class="settings-grid">
             <form class="panel form-grid" id="storeForm">
-              <input type="hidden" id="storeEditId">
-              <div class="form-section span-2">
-                <h2 id="storeFormTitle">Dodaj trgovino</h2>
-                <p>Lokacije, ki imajo ločene dnevne zaključke.</p>
-              </div>
-              <label>
-                Naziv
-                <input id="storeName" required>
-              </label>
-              <label>
-                Mesto
-                <input id="storeCity" required>
-              </label>
-              <label class="span-2">
-                Odgovorna oseba
-                <input id="storeManager" required>
-              </label>
-              <div class="form-actions span-2">
-                <button class="secondary" id="cancelStoreEditBtn" type="button">Prekliči</button>
-                <button class="primary" id="storeSubmitBtn" type="submit">Dodaj trgovino</button>
+              <h2 class="span-2">Trgovina</h2>
+              <input type="hidden" id="editStoreId">
+              <label>Naziv<input id="storeName" required></label>
+              <label>Mesto<input id="storeCity" required></label>
+              <label class="span-2">Odgovorna oseba<input id="storeManager" required></label>
+              <div class="actions span-2">
+                <button class="secondary" id="newStoreBtn" type="button">Nova trgovina</button>
+                <button class="primary" type="submit">Shrani trgovino</button>
               </div>
             </form>
-
-            <section class="panel">
-              <div class="panel-head">
-                <div>
-                  <h2>Trgovine</h2>
-                  <p>Aktivne lokacije v sistemu.</p>
-                </div>
-                <button class="danger" id="clearDataBtn" type="button">Začni na čisto</button>
-              </div>
-              <div class="store-list" id="storeList"></div>
-            </section>
-
             <form class="panel form-grid" id="userForm">
-              <input type="hidden" id="userEditId">
-              <div class="form-section span-2">
-                <h2 id="userFormTitle">Dodaj uporabnika</h2>
-                <p>Uporabniki imajo vlogo in dostop do vseh ali izbranih trgovin.</p>
-              </div>
-              <label>
-                Ime in priimek
-                <input id="userName" required>
-              </label>
-              <label>
-                Vloga
-                <select id="userRole">
-                  <option value="blagajnik">Blagajnik</option>
-                  <option value="poslovodja">Poslovodja</option>
-                  <option value="računovodstvo">Računovodstvo</option>
-                  <option value="administrator">Administrator</option>
-                </select>
-              </label>
-              <label class="span-2">
-                Dostop do trgovine
-                <select id="userStoreAccess"></select>
-              </label>
-              <div class="form-actions span-2">
-                <button class="secondary" id="cancelUserEditBtn" type="button">Prekliči</button>
-                <button class="primary" id="userSubmitBtn" type="submit">Dodaj uporabnika</button>
+              <h2 class="span-2">Uporabnik / prodajalka</h2>
+              <input type="hidden" id="editUserId">
+              <label>Ime<input id="userName" required></label>
+              <label>PIN<input id="userPin" inputmode="numeric" placeholder="Pusti prazno, če PIN ostane isti"></label>
+              <label>Vloga<select id="userRole"><option>blagajnik</option><option>poslovodja</option><option>računovodstvo</option><option>administrator</option></select></label>
+              <label>Trgovina<select id="userStore"></select></label>
+              <div class="actions span-2">
+                <button class="secondary" id="newUserBtn" type="button">Nov uporabnik</button>
+                <button class="primary" type="submit">Shrani uporabnika</button>
               </div>
             </form>
-
-            <section class="panel">
-              <div class="panel-head">
-                <div>
-                  <h2>Uporabniki</h2>
-                  <p>Seznam ljudi, ki lahko vnašajo ali potrjujejo zaključke.</p>
-                </div>
-              </div>
-              <div class="store-list" id="userList"></div>
-            </section>
-
-            <section class="panel span-all">
-              <div class="panel-head">
-                <div>
-                  <h2>Podatki in varnostna kopija</h2>
-                  <p>Izvoz shrani celotno stanje programa. Uvoz obnovi podatke iz prej shranjene datoteke.</p>
-                </div>
-                <div class="topbar-actions">
-                  <button class="secondary" id="exportJsonBtn" type="button">Izvozi backup</button>
-                  <button class="secondary" id="importJsonBtn" type="button">Uvozi backup</button>
-                  <input class="hidden-file" id="importJsonFile" type="file" accept="application/json,.json">
-                </div>
-              </div>
-              <div class="audit-list" id="auditList"></div>
-            </section>
           </div>
+          <section class="panel">
+            <div class="panel-head"><h2>Uredi trgovine</h2></div>
+            <table>
+              <thead><tr><th>Naziv</th><th>Mesto</th><th>Odgovorna oseba</th><th>Zaključkov</th><th></th></tr></thead>
+              <tbody id="storeRows"></tbody>
+            </table>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Uredi uporabnike in prodajalke</h2></div>
+            <table>
+              <thead><tr><th>Ime</th><th>Vloga</th><th>Trgovina</th><th>Status</th><th></th></tr></thead>
+              <tbody id="userRows"></tbody>
+            </table>
+          </section>
+          <section class="panel"><h2>Revizijska sled</h2><div id="auditList"></div></section>
         </section>
       </main>
     </div>
-
-    <template id="closingCardTemplate">
-      <article class="closing-card">
-        <div>
-          <div class="card-title"></div>
-          <div class="card-meta"></div>
-        </div>
-        <div class="card-numbers"></div>
-        <div class="card-tags"></div>
-        <div class="card-actions"></div>
-      </article>
-    </template>
-
     <script src="app.js"></script>
   </body>
 </html>

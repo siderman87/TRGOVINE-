@@ -1,38 +1,48 @@
-Blagajne - faza 1 in faza 2
-
-Kako odpres:
-1. Odpri datoteko index.html v brskalniku.
-2. Klikni "Nalozi demo", ce zelis testne podatke.
-3. Uporabi levi meni za pregled, nov zakljucek, potrditve, porocila in trgovine.
+Blagajne faza 3
 
 Kaj je vkljuceno:
-- vec trgovin/lokacij
-- uporabniki z vlogami
-- dnevni zakljucek blagajne
-- gotovina, kartice, druga placila, vracila, pologi
-- avtomatski izracun pricakovane gotovine
-- izracun manjka/viska
-- primerjava karticnega prometa s POS izpiskom
-- priloge k zakljucku
+- PIN prijava
+- SQLite baza: blagajne.sqlite3
+- centralni lokalni API za sinhronizacijo vec trgovin
+- dnevni zakljucki
 - potrjevanje zakljuckov
-- dashboard vseh lokacij
-- porocila s filtri
-- CSV izvoz za racunovodstvo
-- osnovna revizijska sled v podatkih
-- uporabniki z vlogami in dostopi do trgovin
-- urejanje obstojecih trgovin in uporabnikov
-- brisanje napacnih osnutkov zakljuckov
-- ogled prilozenih dokazil iz zakljucka
-- zaklep potrjenih zakljuckov samo za ogled
-- izvoz in uvoz celotnega backupa v JSON datoteki
-- hitri filter "ta mesec"
-- tiskanje porocila iz pogleda Porocila
+- dokazila kot priloge
+- PDF porocila prek gumba "PDF / Natisni"
+- graf prometa po trgovinah
+- statistika po prodajalkah
+- TRIS CSV uvoz
+- revizijska sled
+- urejanje trgovin v programu
+- urejanje uporabnikov, prodajalk, vlog in PIN-ov
+- popravljanje osnutkov zakljuckov
+- deaktivacija uporabnikov, ki ze imajo zgodovino
 
-Opomba:
-Ta verzija hrani podatke lokalno v brskalniku prek localStorage. To je primerno za prototip in testiranje procesa. Za pravo produkcijsko uporabo bi naslednji korak bil backend, skupna baza, prijava, backupi in pravice na strezniku.
+Kaj lahko urejas sam:
+- Nastavitve -> Trgovina: dodaj ali popravi trgovino.
+- Nastavitve -> Uredi trgovine: klikni Uredi ali Izbrisi.
+- Nastavitve -> Uporabnik/prodajalka: dodaj ali popravi ime, vlogo, PIN in trgovino.
+- Porocila -> Popravi: odpri osnutek zakljucka in ga popravi.
+- Potrjenih zakljuckov se ne ureja, ker so zaklenjeni za zgodovino.
 
-Priporocilo za delo:
-- Ko zacnes uporabljati svoje podatke, pojdi v Nastavitve in klikni "Zacni na cisto".
-- Vnesi svoje trgovine in uporabnike.
-- Ob koncu dneva naredi zakljucek za vsako trgovino.
-- Redno klikni "Backup" ali "Izvozi backup", da imas kopijo podatkov tudi zunaj brskalnika.
+Zagon:
+1. Odpri terminal v tej mapi.
+2. Zazeni:
+   python server.py 8767
+3. Odpri:
+   http://127.0.0.1:8767
+
+V tej Codex seji je streznik ze zagnan na:
+http://127.0.0.1:8767
+
+Demo PIN-i:
+- 1234 administrator
+- 2222 racunovodstvo
+- 1111 poslovodja Ljubljana
+- 3333 blagajnik Maribor
+
+TRIS CSV format:
+datum;trgovina;prodajalka;zacetna_gotovina;gotovina;kartice;drugo;vracila;polog;presteta_gotovina;pos_kartice
+2026-06-17;Trgovina Center;Nina Ljubljana;150;800;1200;0;0;700;250;1200
+
+Opomba za pravo produkcijo:
+SQLite verzija je primerna za lokalni centralni racunalnik ali interni streznik. Za pravo uporabo iz vec oddaljenih trgovin bi naslednji korak bil objava API-ja na varovanem strezniku ali zamenjava podatkovnega sloja s Supabase projektom.
