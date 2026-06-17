@@ -45,9 +45,6 @@ const defaultState = {
   audit: []
 };
 
-let state = loadState();
-state.activeUserId = localStorage.getItem(SESSION_KEY) || "";
-
 const elements = {
   loginScreen: document.querySelector("#loginScreen"),
   appShell: document.querySelector("#appShell"),
