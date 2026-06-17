@@ -5,6 +5,9 @@ const supabaseUrl = "https://meddfblefpposadxaljf.supabase.co";
 const supabaseKey =
 "sb_publishable_KmG74vMRJqz5ckg7tdY94Q_4Kg9H1cl";
 
+const supabaseClient = window.supabase.createClient(
+    supabaseUrl,
+    supabaseKey
 );
 
 async function testSupabase() {
@@ -21,7 +24,6 @@ async function testSupabase() {
 }
 
 testSupabase();
-
 const defaultUsers = [
   { id: "u-owner", name: "Gregor Lastnik", role: "administrator", storeIds: ["all"] },
   { id: "u-accounting", name: "Maja Računovodstvo", role: "računovodstvo", storeIds: ["all"] },
