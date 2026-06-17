@@ -1,4 +1,3 @@
-const STORAGE_KEY = "blagajne-faza-1-2";
 console.log("APP.JS SE JE NALOŽIL");
 
 const supabaseUrl = "https://meddfblefpposadxaljf.supabase.co";
@@ -127,6 +126,7 @@ const viewCopy = {
   reports: ["Poročila", "Filtri, seštevki in izvoz podatkov za računovodstvo."],
   settings: ["Nastavitve", "Upravljanje trgovin, uporabnikov in varnostnih kopij."]
 };
+const STORAGE_KEY = "blagajne-faza-1-2";
 
 function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
