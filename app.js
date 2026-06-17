@@ -41,6 +41,10 @@ async function loadStoresFromSupabase() {
 
     state.stores = data;
     render();
+    
+    renderUsers();
+applyRolePermissions();
+renderStoreOptions();
 
 }
 const defaultUsers = [
