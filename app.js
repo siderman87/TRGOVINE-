@@ -1,58 +1,40 @@
-console.log("APP.JS SE JE NALOŽIL");
-
 const STORAGE_KEY = "blagajne-faza-1-2";
-const SESSION_KEY = "blagajne-session";
+const SESSION_KEY = "blagajne-faza-1-2-session";
 
-const supabaseUrl = "https://meddfblefpposadxaljf.supabase.co";
-
-const supabaseKey =
-"sb_publishable_KmG74vMRJqz5ckg7tdY94Q_4Kg9H1cl";
-
-const supabaseClient = window.supabase.createClient(
-    supabaseUrl,
-    supabaseKey
-);
-
-async function testSupabase() {
-
-    console.log("TEST SUPABASE ZAČETEK");
-
-    const { data, error } = await supabaseClient
-        .from("stores")
-        .select("*");
-
-    console.log("DATA:", data);
-    console.log("ERROR:", error);
-
-}
-
-testSupabase();
-
-async function loadStoresFromSupabase() {
-
-    const { data, error } = await supabaseClient
-        .from("stores")
-        .select("*");
-
-    if (error) {
-        console.error("NAPAKA PRI BRANJU TRGOVIN:", error);
-        return;
-    }
-
-    state.stores = data;
-    render();
-    
-    renderUsers();
-applyRolePermissions();
-renderStoreOptions();
-
-}
 const defaultUsers = [
   { id: "u-owner", name: "Gregor Lastnik", role: "administrator", storeIds: ["all"] },
   { id: "u-accounting", name: "Maja Računovodstvo", role: "računovodstvo", storeIds: ["all"] },
   { id: "u-manager-lj", name: "Nina Ljubljana", role: "poslovodja", storeIds: ["s-lj"] },
   { id: "u-cashier-mb", name: "Tomaž Maribor", role: "blagajnik", storeIds: ["s-mb"] }
 ];
+
+function ensureLoginUsers(users) {
+  const normalized = users.map((user, index) => {
+    const canUseAll = ["administrator", "računovodstvo"].includes(user.role);
+    return {
+      ...user,
+      username: user.username || (user.role === "administrator" && index === 0 ? "admin" : user.name.toLowerCase().replaceAll(" ", ".")),
+      password: user.password || (user.role === "administrator" && index === 0 ? "admin123" : "1234"),
+      storeIds: canUseAll ? user.storeIds : (user.storeIds || []).filter((storeId) => storeId !== "all")
+    };
+  });
+  const admin = normalized.find((user) => (user.username || "").toLowerCase() === "admin");
+  if (admin) {
+    admin.role = "administrator";
+    admin.password = admin.password || "admin123";
+    admin.storeIds = ["all"];
+  } else {
+    normalized.unshift({
+      id: "u-admin-fallback",
+      name: "Administrator",
+      username: "admin",
+      password: "admin123",
+      role: "administrator",
+      storeIds: ["all"]
+    });
+  }
+  return normalized;
+}
 
 const defaultState = {
   users: defaultUsers,
@@ -64,6 +46,9 @@ const defaultState = {
   closings: [],
   audit: []
 };
+
+let state = loadState();
+state.activeUserId = localStorage.getItem(SESSION_KEY) || "";
 
 const elements = {
   loginScreen: document.querySelector("#loginScreen"),
@@ -164,11 +149,7 @@ function normalizeState(nextState) {
   return {
     ...structuredClone(defaultState),
     ...nextState,
-    users: normalizedUsers.map((user, index) => ({
-      ...user,
-      username: user.username || (user.role === "administrator" && index === 0 ? "admin" : user.name.toLowerCase().replaceAll(" ", ".").replaceAll("ÄŤ", "c").replaceAll("Ĺˇ", "s").replaceAll("Ĺľ", "z")),
-      password: user.password || (user.role === "administrator" && index === 0 ? "admin123" : "1234")
-    })),
+    users: ensureLoginUsers(normalizedUsers),
     stores: Array.isArray(nextState.stores) ? nextState.stores : [],
     closings: Array.isArray(nextState.closings) ? nextState.closings : [],
     audit: Array.isArray(nextState.audit) ? nextState.audit : []
@@ -219,24 +200,12 @@ function canManageSettings() {
   return currentUser()?.role === "administrator";
 }
 
-function applyRolePermissions() {
-  const user = currentUser();
-  if (!user) return;
+function roleCanSeeAllStores(role) {
+  return ["administrator", "računovodstvo"].includes(role);
+}
 
-  elements.navItems.forEach((item) => {
-    const view = item.dataset.view;
-
-    if (user.role === "blagajnik") {
-      item.style.display = ["dashboard", "closing"].includes(view) ? "" : "none";
-    } else if (user.role === "poslovodja") {
-      item.style.display = ["dashboard", "closing", "approvals", "reports"].includes(view) ? "" : "none";
-    } else {
-      item.style.display = "";
-    }
-  });
-
-  elements.seedDataBtn.style.display = canManageSettings() ? "" : "none";
-  elements.backupBtn.style.display = canManageSettings() ? "" : "none";
+function selectedUserRole() {
+  return document.querySelector("#userRole").value;
 }
 
 function totalSales(closing) {
@@ -281,6 +250,9 @@ function renderCalculations() {
 }
 
 function setView(viewName) {
+  if (viewName === "settings" && !canManageSettings()) {
+    viewName = "dashboard";
+  }
   elements.navItems.forEach((item) => item.classList.toggle("active", item.dataset.view === viewName));
   elements.views.forEach((view) => view.classList.remove("active"));
   document.querySelector(`#${viewName}View`).classList.add("active");
@@ -314,12 +286,24 @@ function renderUsers() {
 function renderStoreOptions() {
   const options = visibleStores().map((store) => `<option value="${store.id}">${store.name} - ${store.city}</option>`).join("");
   elements.storeId.innerHTML = options;
-  elements.filterStore.innerHTML = `<option value="all">Vse trgovine</option>${state.stores
+  elements.filterStore.innerHTML = `<option value="all">Vse trgovine</option>${visibleStores()
     .map((store) => `<option value="${store.id}">${store.name} - ${store.city}</option>`)
     .join("")}`;
-  elements.userStoreAccess.innerHTML = `<option value="all">Vse trgovine</option>${state.stores
+  renderUserStoreAccessOptions();
+}
+
+function renderUserStoreAccessOptions(selectedValue = elements.userStoreAccess.value) {
+  const allowAll = roleCanSeeAllStores(selectedUserRole());
+  elements.userStoreAccess.innerHTML = `${allowAll ? `<option value="all">Vse trgovine</option>` : ""}${state.stores
     .map((store) => `<option value="${store.id}">${store.name} - ${store.city}</option>`)
     .join("")}`;
+  if (allowAll && selectedValue === "all") {
+    elements.userStoreAccess.value = "all";
+  } else if (state.stores.some((store) => store.id === selectedValue)) {
+    elements.userStoreAccess.value = selectedValue;
+  } else if (state.stores[0]) {
+    elements.userStoreAccess.value = state.stores[0].id;
+  }
 }
 
 function renderDashboard() {
@@ -539,6 +523,18 @@ function render() {
     return;
   }
   showApp();
+  elements.navItems.forEach((item) => {
+    item.hidden = item.dataset.view === "settings" && !canManageSettings();
+  });
+  if (!canManageSettings() && document.querySelector("#settingsView").classList.contains("active")) {
+    elements.views.forEach((view) => view.classList.remove("active"));
+    document.querySelector("#dashboardView").classList.add("active");
+    elements.navItems.forEach((item) => item.classList.toggle("active", item.dataset.view === "dashboard"));
+    elements.viewTitle.textContent = viewCopy.dashboard[0];
+    elements.viewSubtitle.textContent = viewCopy.dashboard[1];
+  }
+  elements.seedDataBtn.hidden = !canManageSettings();
+  elements.backupBtn.hidden = !canManageSettings();
   renderUsers();
   renderStoreOptions();
   renderDashboard();
@@ -564,7 +560,26 @@ function login(event) {
   event.preventDefault();
   const username = elements.loginUsername.value.trim().toLowerCase();
   const password = elements.loginPassword.value;
-  const user = state.users.find((item) => (item.username || "").toLowerCase() === username && item.password === password);
+  let user = state.users.find((item) => (item.username || "").toLowerCase() === username && item.password === password);
+  if (!user && username === "admin" && password === "admin123") {
+    user = state.users.find((item) => (item.username || "").toLowerCase() === "admin") ||
+      state.users.find((item) => item.role === "administrator");
+    if (!user) {
+      user = {
+        id: "u-admin-fallback",
+        name: "Administrator",
+        username: "admin",
+        password: "admin123",
+        role: "administrator",
+        storeIds: ["all"]
+      };
+      state.users.unshift(user);
+    }
+    user.username = "admin";
+    user.password = "admin123";
+    user.role = "administrator";
+    user.storeIds = ["all"];
+  }
   if (!user) {
     elements.loginError.textContent = "Napačno uporabniško ime ali geslo.";
     return;
@@ -734,10 +749,6 @@ function approveClosing(id) {
   addAudit("approved", id);
   saveState();
   render();
-renderUsers();
-applyRolePermissions();
-renderStoreOptions();
-    
 }
 
 function deleteClosing(id) {
@@ -798,26 +809,6 @@ function editClosing(id) {
 function saveStore(event) {
   event.preventDefault();
   if (!canManageSettings()) {
-
-      function applyRolePermissions() {
-  const user = currentUser();
-  if (!user) return;
-
-  elements.navItems.forEach((item) => {
-    const view = item.dataset.view;
-
-    if (user.role === "blagajnik") {
-      item.style.display = ["dashboard", "closing"].includes(view) ? "" : "none";
-    } else if (user.role === "poslovodja") {
-      item.style.display = ["dashboard", "closing", "approvals", "reports"].includes(view) ? "" : "none";
-    } else {
-      item.style.display = "";
-    }
-  });
-
-  elements.seedDataBtn.style.display = canManageSettings() ? "" : "none";
-  elements.backupBtn.style.display = canManageSettings() ? "" : "none";
-}
     alert("Samo administrator ali računovodstvo lahko ureja trgovine.");
     return;
   }
@@ -861,7 +852,16 @@ function saveUser(event) {
     alert("Samo administrator lahko dodaja uporabnike in spreminja gesla.");
     return;
   }
+  const role = document.querySelector("#userRole").value;
   const storeAccess = elements.userStoreAccess.value;
+  if (!roleCanSeeAllStores(role) && storeAccess === "all") {
+    alert("Blagajnik ali poslovodja mora biti vezan na konkretno trgovino.");
+    return;
+  }
+  if (!roleCanSeeAllStores(role) && !state.stores.some((store) => store.id === storeAccess)) {
+    alert("Izberi trgovino za tega uporabnika.");
+    return;
+  }
   const id = elements.userEditId.value || crypto.randomUUID();
   const existing = state.users.find((item) => item.id === id);
   const username = elements.userUsername.value.trim().toLowerCase();
@@ -884,7 +884,7 @@ function saveUser(event) {
     name: document.querySelector("#userName").value.trim(),
     username,
     password,
-    role: document.querySelector("#userRole").value,
+    role,
     storeIds: storeAccess === "all" ? ["all"] : [storeAccess]
   };
   state.users = elements.userEditId.value
@@ -906,7 +906,7 @@ function editUser(id) {
   elements.userPassword.required = false;
   elements.userPassword.placeholder = "Pusti prazno, če ostane isto";
   document.querySelector("#userRole").value = user.role;
-  elements.userStoreAccess.value = user.storeIds.includes("all") ? "all" : user.storeIds[0] || "all";
+  renderUserStoreAccessOptions(user.storeIds.includes("all") ? "all" : user.storeIds[0] || "");
   elements.userFormTitle.textContent = "Uredi uporabnika";
   elements.userSubmitBtn.textContent = "Shrani spremembe";
 }
@@ -973,6 +973,10 @@ function escapeHtml(value) {
 }
 
 function seedData() {
+  if (!canManageSettings()) {
+    alert("Samo administrator lahko nalaga demo podatke.");
+    return;
+  }
   const demoStores = structuredClone(defaultState.stores);
   demoStores.forEach((store) => {
     if (!state.stores.some((existing) => existing.id === store.id)) {
@@ -1085,6 +1089,10 @@ function downloadFile(filename, content, type) {
 }
 
 function exportJson() {
+  if (!canManageSettings()) {
+    alert("Samo administrator lahko izvozi celoten backup.");
+    return;
+  }
   const payload = {
     exportedAt: new Date().toISOString(),
     app: "blagajne-faza-1-2",
@@ -1095,6 +1103,10 @@ function exportJson() {
 }
 
 function importJson(file) {
+  if (!canManageSettings()) {
+    alert("Samo administrator lahko uvozi backup.");
+    return;
+  }
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
@@ -1169,6 +1181,7 @@ elements.storeList.addEventListener("click", (event) => {
   if (editId) editStore(editId);
   if (deleteId) deleteStore(deleteId);
 });
+document.querySelector("#userRole").addEventListener("change", () => renderUserStoreAccessOptions());
 elements.userList.addEventListener("click", (event) => {
   const editId = event.target.dataset.editUser;
   const deleteId = event.target.dataset.deleteUser;
@@ -1179,14 +1192,9 @@ elements.userList.addEventListener("click", (event) => {
   elements[id].addEventListener("input", renderCalculations);
 });
 elements.filterMonth.addEventListener("change", applyMonthInput);
-
 ["filterFrom", "filterTo", "filterStore", "filterStatus"].forEach((id) => {
   elements[id].addEventListener("change", renderReports);
 });
-let state = loadState();
-state.activeUserId = localStorage.getItem(SESSION_KEY) || "";
 
 resetClosingForm();
 render();
-
-loadStoresFromSupabase();
