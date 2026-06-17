@@ -1119,8 +1119,5 @@ elements.filterMonth.addEventListener("change", applyMonthInput);
   elements[id].addEventListener("change", renderReports);
 });
 
-let state = loadState();
-state.activeUserId = localStorage.getItem(SESSION_KEY) || "";
-
 resetClosingForm();
 render();
