@@ -5,16 +5,22 @@ const supabaseUrl = "https://meddfblefpposadxaljf.supabase.co";
 const supabaseKey =
 "sb_publishable_KmG74vMRJqz5ckg7tdY94Q_4Kg9H1cl";
 
-const supabase = window.supabase.createClient(
+const supabaseClient = window.supabase.createClient(
     supabaseUrl,
     supabaseKey
 );
 
 async function testSupabase() {
-  console.log("TEST SUPABASE ZAČETEK");
-  const { data, error } = await supabase.from("stores").select("*");
-  console.log("DATA:", data);
-  console.log("ERROR:", error);
+
+    console.log("TEST SUPABASE ZAČETEK");
+
+    const { data, error } = await supabaseClient
+        .from("stores")
+        .select("*");
+
+    console.log("DATA:", data);
+    console.log("ERROR:", error);
+
 }
 
 testSupabase();
