@@ -27,6 +27,22 @@ async function testSupabase() {
 }
 
 testSupabase();
+
+async function loadStoresFromSupabase() {
+
+    const { data, error } = await supabaseClient
+        .from("stores")
+        .select("*");
+
+    if (error) {
+        console.error("NAPAKA PRI BRANJU TRGOVIN:", error);
+        return;
+    }
+
+    state.stores = data;
+    render();
+
+}
 const defaultUsers = [
   { id: "u-owner", name: "Gregor Lastnik", role: "administrator", storeIds: ["all"] },
   { id: "u-accounting", name: "Maja Računovodstvo", role: "računovodstvo", storeIds: ["all"] },
@@ -1124,3 +1140,5 @@ state.activeUserId = localStorage.getItem(SESSION_KEY) || "";
 
 resetClosingForm();
 render();
+
+loadStoresFromSupabase();
