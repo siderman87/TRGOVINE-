@@ -1119,6 +1119,8 @@ elements.filterMonth.addEventListener("change", applyMonthInput);
 ["filterFrom", "filterTo", "filterStore", "filterStatus"].forEach((id) => {
   elements[id].addEventListener("change", renderReports);
 });
+let state = loadState();
+state.activeUserId = localStorage.getItem(SESSION_KEY) || "";
 
 resetClosingForm();
 render();
