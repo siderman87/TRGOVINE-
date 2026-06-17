@@ -215,6 +215,26 @@ function canManageSettings() {
   return currentUser()?.role === "administrator";
 }
 
+function applyRolePermissions() {
+  const user = currentUser();
+  if (!user) return;
+
+  elements.navItems.forEach((item) => {
+    const view = item.dataset.view;
+
+    if (user.role === "blagajnik") {
+      item.style.display = ["dashboard", "closing"].includes(view) ? "" : "none";
+    } else if (user.role === "poslovodja") {
+      item.style.display = ["dashboard", "closing", "approvals", "reports"].includes(view) ? "" : "none";
+    } else {
+      item.style.display = "";
+    }
+  });
+
+  elements.seedDataBtn.style.display = canManageSettings() ? "" : "none";
+  elements.backupBtn.style.display = canManageSettings() ? "" : "none";
+}
+
 function totalSales(closing) {
   return closing.cashSales + closing.cardSales + closing.otherSales - closing.refunds;
 }
