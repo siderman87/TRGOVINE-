@@ -1,3 +1,4 @@
+const STORAGE_KEY = "blagajne-faza-1-2";
 console.log("APP.JS SE JE NALOŽIL");
 
 const supabaseUrl = "https://meddfblefpposadxaljf.supabase.co";
