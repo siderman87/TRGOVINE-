@@ -1121,5 +1121,5 @@ elements.filterMonth.addEventListener("change", applyMonthInput);
 let state = loadState();
 state.activeUserId = localStorage.getItem(SESSION_KEY) || "";
 
-resetClosingForm();
+state resetClosingForm();
 render();
