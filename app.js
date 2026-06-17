@@ -1,3 +1,6 @@
+const supabaseUrl = "https://meddfblefpposadxaljf.supabase.co";
+const supabaseKey = "sb_publishable_KmG74vMRJqz5ckg7tdY94Q_4Kg9H1cl";
+const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 const STORAGE_KEY = "blagajne-faza-1-2";
 const SESSION_KEY = "blagajne-faza-1-2-session";
 
